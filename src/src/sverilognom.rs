@@ -4,20 +4,16 @@ use nom::{
     IResult,
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_till1, take_until},
-    // we do not plan to stream verilog. so we
-    // only include completes.
-    character::complete::{char, digit1, multispace0, one_of, satisfy},
-    character::{is_alphanumeric, is_hex_digit},
-    combinator::{cut, map, opt, recognize, value},
+    character::{
+        complete::{char, digit1, multispace0, one_of, satisfy},
+        is_alphanumeric, is_hex_digit,
+    },
+    combinator::{cut, map, map_res, opt, recognize, value},
     multi::{fold_many0, many0_count, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
 };
 
 use super::*;
-
-fn u82str_unsafe(i: &[u8]) -> &str {
-    unsafe { std::str::from_utf8_unchecked(i) }
-}
 
 /// comment: starts with // and ends with a line.
 /// do not use streaming operators here.
@@ -56,7 +52,14 @@ pub fn skip_whitespace_and_comment(mut i: &[u8]) -> IResult<&[u8], ()> {
 /// about and discarded).
 fn attr_block(i: &[u8]) -> IResult<&[u8], bool> {
     let (i, content) = delimited(tag("(*"), take_until("*)"), tag("*)"))(i)?;
-    let content_str = u82str_unsafe(content).trim();
+    let content_str = std::str::from_utf8(content)
+        .map_err(|_| {
+            nom::Err::Error(nom::error::Error::new(
+                i,
+                nom::error::ErrorKind::Char,
+            ))
+        })?
+        .trim();
     let is_keep = content_str == "keep";
     if !is_keep {
         tracing::warn!("ignoring unknown attribute: (* {} *)", content_str);
@@ -97,7 +100,7 @@ where
 
 /// Parse an identifier.
 fn ident(i: &[u8]) -> IResult<&[u8], CompactString> {
-    map(
+    map_res(
         alt((
             preceded(
                 char('\\'),
@@ -110,20 +113,25 @@ fn ident(i: &[u8]) -> IResult<&[u8], CompactString> {
                 take_till(|c| !is_alphanumeric(c) && c != b'_' && c != b'$'),
             )),
         )),
-        |s| CompactString::from(u82str_unsafe(s)),
+        |s| std::str::from_utf8(s).map(CompactString::from),
     )(i)
 }
 
 fn int(input: &[u8]) -> IResult<&[u8], isize> {
-    map(recognize(preceded(opt(char('-')), digit1)), |i| {
-        isize::from_str(u82str_unsafe(i)).unwrap()
-    })(input)
+    map_res(
+        map_res(
+            recognize(preceded(opt(char('-')), digit1)),
+            std::str::from_utf8,
+        ),
+        isize::from_str,
+    )(input)
 }
 
 fn uint(input: &[u8]) -> IResult<&[u8], usize> {
-    map(recognize(digit1), |i| {
-        usize::from_str(u82str_unsafe(i)).unwrap()
-    })(input)
+    map_res(
+        map_res(recognize(digit1), std::str::from_utf8),
+        usize::from_str,
+    )(input)
 }
 
 /// parses a constant literal.
@@ -472,11 +480,10 @@ impl From<nom::Err<nom::error::Error<&[u8]>>> for ParseError {
             },
             nom::Err::Error(e) | nom::Err::Failure(e) => ParseError {
                 code: e.code,
-                partial_input: std::str::from_utf8(
+                partial_input: String::from_utf8_lossy(
                     &e.input[..e.input.len().min(50)],
                 )
-                .unwrap()
-                .to_string(),
+                .into_owned(),
             },
         }
     }
