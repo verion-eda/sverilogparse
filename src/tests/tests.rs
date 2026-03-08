@@ -2,12 +2,16 @@
 
 use sverilogparse::*;
 
+fn init_tracing() {
+    let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+}
+
 const VERILOG_SIMPLE: &str = include_str!("simple.v");
 const VERILOG_NOT_CONNECTED: &str = include_str!("not_connected.v");
 
 #[test]
 fn test_simple() {
-    clilog::init_stdout_simple_trace();
+    init_tracing();
     let parsed = SVerilog::parse_str(VERILOG_SIMPLE).expect("parse error");
     println!("Parsed is: {parsed:?}");
     println!("Restructure: \n{parsed}");
@@ -38,7 +42,7 @@ const VERILOG_VECTOR: &str = include_str!("vector.v");
 
 #[test]
 fn test_vector() {
-    clilog::init_stdout_simple_trace();
+    init_tracing();
     let parsed = SVerilog::parse_str(VERILOG_VECTOR).expect("parse error");
     println!("Restructure: \n{parsed}");
     assert_eq!(format!("{parsed}"), "\
@@ -61,7 +65,7 @@ const VERILOG_ASSIGN: &str = include_str!("assign.v");
 
 #[test]
 fn test_assign() {
-    clilog::init_stdout_simple_trace();
+    init_tracing();
     let parsed = SVerilog::parse_str(VERILOG_ASSIGN).expect("parse error");
     println!("Restructure: \n{parsed}");
     assert_eq!(
@@ -93,7 +97,7 @@ const VERILOG_PORTDEF: &str = include_str!("portdef.v");
 
 #[test]
 fn test_portdef() {
-    clilog::init_stdout_simple_trace();
+    init_tracing();
     let parsed = SVerilog::parse_str(VERILOG_PORTDEF).expect("parse error");
     println!("Restructure: \n{parsed}");
     assert_eq!(format!("{parsed}"), "\
