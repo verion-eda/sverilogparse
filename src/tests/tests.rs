@@ -23,7 +23,7 @@ module simple(inp1, inp2, ispd_clk, out);
   wire inp1;
   wire inp2;
   wire ispd_clk;
-  wire out;
+  (* keep *) wire out;
 
   na02s01 u1(.a(inp1), .b(inp2), .o(n1));
   ms00f80 f1(.d(n1), .ck(ispd_clk), .o(n2));
@@ -31,6 +31,23 @@ module simple(inp1, inp2, ispd_clk, out);
 endmodule
 "
     );
+
+    let module = &parsed.modules[0].1;
+
+    // `wire out` has `(* keep *)` in simple.v.
+    let kept_wires: Vec<_> = module.defs.iter().filter(|d| d.keep).collect();
+    assert_eq!(kept_wires.len(), 1);
+    assert_eq!(kept_wires[0].name, "out");
+    assert_eq!(kept_wires[0].typ, WireDefType::Wire);
+
+    // Unknown attribute `(* src = "..." *)` on `input inp1` is warned about
+    // and does not set keep.
+    let inp1 = module.defs.iter().find(|d| d.name == "inp1").unwrap();
+    assert!(!inp1.keep);
+
+    // No cells or assigns have keep in this file.
+    assert!(module.cells.iter().all(|c| !c.keep));
+    assert!(module.assigns.iter().all(|a| !a.keep));
 }
 
 const VERILOG_VECTOR: &str = include_str!("vector.v");

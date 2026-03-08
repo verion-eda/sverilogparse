@@ -20,7 +20,7 @@ wire n2;
 wire inp1;
 wire inp2;
 wire ispd_clk;
-wire out;
+(* keep *) wire out;
 
 // Start cells
 na02s01 u1 ( .a(inp1), .b(inp2), .o(n1) );

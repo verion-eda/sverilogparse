@@ -1,21 +1,34 @@
 //! A structural verilog parser written in Rust.
 //!
-//! # Usage
+//! # Verilog attributes
 //!
-//! Just pass a `&str` to [SVerilog::parse_str]. Example:
+//! Verilog supports [synthesis attributes] of the form `(* name = value *)`,
+//! which tools such as Yosys use to annotate netlist objects with metadata.
+//! This parser recognises attribute blocks and tracks the `(* keep *)`
+//! attribute on modules, wire/port declarations, assigns, and cell
+//! instantiations — setting the `keep` field on the corresponding data
+//! structure. All other attributes are parsed and silently discarded with a
+//! [`tracing::warn`] log message.
+//!
+//! [synthesis attributes]: https://yosyshq.readthedocs.io/projects/yosys/en/latest/using_yosys/verilog.html#verilog-attributes-and-non-standard-features
+//!
+//! # Examples
+//!
 //! ```
 //! use sverilogparse::SVerilog;
 //!
-//! let _parsed = SVerilog::parse_str(
+//! # fn main() -> Result<(), String> {
+//! let parsed = SVerilog::parse_str(
 //!     r#"
 //! module simple (a, b);
-//! input a;
+//! (* keep *) input a;
 //! output b;
 //! not n1 (.a(a), .out(b));
 //! endmodule
 //! "#,
-//! )
-//! .expect("parse error");
+//! )?;
+//! # Ok(())
+//! # }
 //! ```
 
 use compact_str::CompactString;
@@ -39,6 +52,9 @@ pub struct SVerilogWireDef {
     pub width: Option<SVerilogRange>,
     /// Wire type.
     pub typ: WireDefType,
+    /// Whether the `(* keep *)` attribute was present, marking this wire as
+    /// not to be removed by the optimizer.
+    pub keep: bool, // TODO will become an Attribute type once we add more
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -60,6 +76,9 @@ pub struct SVerilogModule {
     pub assigns: Vec<SVerilogAssign>,
     /// Cells in the module body.
     pub cells: Vec<SVerilogCell>,
+    /// Whether the `(* keep *)` attribute was present on this module
+    /// declaration, which implies keep on all instances of the module.
+    pub keep: bool, // TODO will become an Attribute type once we add more
 }
 
 /// A port definition. Can be either a single identifier, or
@@ -106,6 +125,8 @@ pub struct SVerilogAssign {
     pub lhs: Wirexpr,
     /// Right-hand side expr.
     pub rhs: Wirexpr,
+    /// Whether the `(* keep *)` attribute was present on this assignment.
+    pub keep: bool, // TODO will become an Attribute type once we add more
 }
 
 /// A parsed cell instantiation in structural verilog.
@@ -117,6 +138,9 @@ pub struct SVerilogCell {
     pub cell_name: CompactString,
     /// contains tuples of (macro_pin_name, wire_name).
     pub ioports: Vec<(CompactString, Wirexpr)>,
+    /// Whether the `(* keep *)` attribute was present, marking this cell as
+    /// not to be removed by the optimizer.
+    pub keep: bool, // TODO will become an Attribute type once we add more
 }
 
 mod sverilognom;
