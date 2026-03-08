@@ -105,7 +105,8 @@ endmodule
 #[test]
 fn test_open_timer_benchmarks() {
     use std::path::Path;
-    let benchmarks_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/benchmarks");
+    let benchmarks_dir =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/benchmarks");
     let mut entries: Vec<_> = std::fs::read_dir(&benchmarks_dir)
         .expect("benchmarks dir not found")
         .map(|e| e.expect("dir entry").path())
@@ -113,17 +114,20 @@ fn test_open_timer_benchmarks() {
         .collect();
     entries.sort();
     for path in &entries {
-        let content = std::fs::read_to_string(path)
-            .unwrap_or_else(|e| panic!("failed to read {}: {}", path.display(), e));
-        SVerilog::parse_str(&content)
-            .unwrap_or_else(|e| panic!("failed to parse {}: {}", path.display(), e));
+        let content = std::fs::read_to_string(path).unwrap_or_else(|e| {
+            panic!("failed to read {}: {}", path.display(), e)
+        });
+        SVerilog::parse_str(&content).unwrap_or_else(|e| {
+            panic!("failed to parse {}: {}", path.display(), e)
+        });
     }
     assert!(!entries.is_empty(), "no benchmark files found");
 }
 
 #[test]
 fn test_allow_not_connected() {
-    let parsed = SVerilog::parse_str(VERILOG_NOT_CONNECTED).expect("parse error");
+    let parsed =
+        SVerilog::parse_str(VERILOG_NOT_CONNECTED).expect("parse error");
     println!("Parsed is: {parsed:?}");
     println!("Restructure: \n{parsed}");
     assert_eq!(
