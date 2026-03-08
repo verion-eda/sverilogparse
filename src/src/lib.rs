@@ -2,15 +2,22 @@
 //!
 //! # Verilog attributes
 //!
-//! Verilog supports [synthesis attributes] of the form `(* name = value *)`,
-//! which tools such as Yosys use to annotate netlist objects with metadata.
-//! This parser recognises attribute blocks and tracks the `(* keep *)`
-//! attribute on modules, wire/port declarations, assigns, and cell
-//! instantiations — setting the `keep` field on the corresponding data
-//! structure. All other attributes are parsed and silently discarded with a
-//! [`tracing::warn`] log message.
+//! [IEEE 1364-2001] (Verilog-2001) introduced `(* name = value *)` attribute
+//! blocks that can precede any module declaration, port/net/reg declaration,
+//! continuous assignment, or module instantiation. The [formal BNF grammar]
+//! defines `attribute_instance` as a prefix production on all of those
+//! constructs. Tools such as Yosys use attributes extensively - see the
+//! [Yosys attribute documentation] for the full list of recognised keys.
 //!
-//! [synthesis attributes]: https://yosyshq.readthedocs.io/projects/yosys/en/latest/using_yosys/verilog.html#verilog-attributes-and-non-standard-features
+//! This parser handles attributes in all positions that structural verilog
+//! requires (modules, wire/port declarations, assigns, and cell
+//! instantiations). Currently only the `(* keep *)` attribute is tracked:
+//! it sets the `keep` field on the corresponding data structure. All other
+//! attributes are consumed and discarded with a [`tracing::warn`] log message.
+//!
+//! [IEEE 1364-2001]: https://ieeexplore.ieee.org/document/954909
+//! [formal BNF grammar]: https://www.syncad.com/VeriLogger_bnf_Syntax_Verilog_2001.htm
+//! [Yosys attribute documentation]: https://yosyshq.readthedocs.io/projects/yosys/en/latest/using_yosys/verilog.html#verilog-attributes-and-non-standard-features
 //!
 //! # Examples
 //!
