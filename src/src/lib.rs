@@ -1,18 +1,21 @@
 //! A structural verilog parser written in Rust.
 //!
 //! # Usage
-//! 
+//!
 //! Just pass a `&str` to [SVerilog::parse_str]. Example:
 //! ```
 //! use sverilogparse::SVerilog;
-//! 
-//! let _parsed = SVerilog::parse_str(r#"
+//!
+//! let _parsed = SVerilog::parse_str(
+//!     r#"
 //! module simple (a, b);
 //! input a;
 //! output b;
 //! not n1 (.a(a), .out(b));
 //! endmodule
-//! "#).expect("parse error");
+//! "#,
+//! )
+//! .expect("parse error");
 //! ```
 
 use compact_str::CompactString;
@@ -43,7 +46,7 @@ pub enum WireDefType {
     Input,
     Output,
     InOut,
-    Wire
+    Wire,
 }
 
 /// A parsed structural verilog module.
@@ -66,7 +69,7 @@ pub enum SVerilogPortDef {
     /// E.g. `gpio`.
     Basic(CompactString),
     /// E.g. `.gpio({g1, g2, g3})`.
-    Conn(CompactString, Wirexpr)
+    Conn(CompactString, Wirexpr),
 }
 
 /// Basic component of a wire expression, which can be
@@ -119,24 +122,29 @@ pub struct SVerilogCell {
 mod sverilognom;
 
 impl SVerilog {
-    /// Parses a string of structural verilog code, and returns a [Result], indicating successful parse result or an error string.
+    /// Parses a string of structural verilog code, and returns a [Result],
+    /// indicating successful parse result or an error string.
     #[inline]
     pub fn parse_str(s: &str) -> Result<SVerilog, String> {
         Ok(sverilognom::parse_sverilog(s.as_bytes())?)
     }
-    
-    /// Parses a u8 slice of structural verilog code, and returns a [Result], indicating successful parse result or an error string.
+
+    /// Parses a u8 slice of structural verilog code, and returns a [Result],
+    /// indicating successful parse result or an error string.
     #[inline]
     pub fn parse_u8slice(s: &[u8]) -> Result<SVerilog, String> {
         Ok(sverilognom::parse_sverilog(s)?)
     }
-    
-    /// Parses a structural verilog code at the specific path, and returns a [Result], indicating successful parse result or an error string.
+
+    /// Parses a structural verilog code at the specific path, and returns a
+    /// [Result], indicating successful parse result or an error string.
     #[inline]
-    pub fn parse_file(path: impl AsRef<std::path::Path>) -> Result<SVerilog, String> {
+    pub fn parse_file(
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<SVerilog, String> {
         let s = match std::fs::read(&path) {
             Ok(s) => s,
-            Err(e) => return Err(format!("{}", e))
+            Err(e) => return Err(format!("{}", e)),
         };
         SVerilog::parse_u8slice(&s)
     }
