@@ -4,6 +4,8 @@ use sverilogparse::*;
 
 const VERILOG_SIMPLE: &str = include_str!("simple.v");
 const VERILOG_NOT_CONNECTED: &str = include_str!("not_connected.v");
+const VERILOG_KEEP_ATTRS: &str = include_str!("keep_attrs.v");
+const VERILOG_VECTOR: &str = include_str!("vector.v");
 
 #[test]
 fn test_simple() {
@@ -23,7 +25,7 @@ module simple(inp1, inp2, ispd_clk, out);
   wire inp1;
   wire inp2;
   wire ispd_clk;
-  wire out;
+  (* keep *) wire out;
 
   na02s01 u1(.a(inp1), .b(inp2), .o(n1));
   ms00f80 f1(.d(n1), .ck(ispd_clk), .o(n2));
@@ -31,9 +33,75 @@ module simple(inp1, inp2, ispd_clk, out);
 endmodule
 "
     );
+
+    let module = &parsed.modules[0].1;
+
+    // `wire out` has `(* keep *)` in simple.v.
+    let kept_wires: Vec<_> = module.defs.iter().filter(|d| d.keep).collect();
+    assert_eq!(kept_wires.len(), 1);
+    assert_eq!(kept_wires[0].name, "out");
+    assert_eq!(kept_wires[0].typ, WireDefType::Wire);
+
+    // Unknown attribute `(* src = "..." *)` on `input inp1` is warned about
+    // and does not set keep.
+    let inp1 = module.defs.iter().find(|d| d.name == "inp1").unwrap();
+    assert!(!inp1.keep);
+
+    // No cells or assigns have keep in this file.
+    assert!(module.cells.iter().all(|c| !c.keep));
+    assert!(module.assigns.iter().all(|a| !a.keep));
 }
 
-const VERILOG_VECTOR: &str = include_str!("vector.v");
+#[test]
+fn test_keep_attrs() {
+    let parsed = SVerilog::parse_str(VERILOG_KEEP_ATTRS).expect("parse error");
+    let (module_name, module) = &parsed.modules[0];
+
+    assert_eq!(module_name.as_str(), "keep_attrs");
+    assert!(module.keep, "module should have keep");
+
+    let def = |name: &str| {
+        module
+            .defs
+            .iter()
+            .find(|d| d.name == name)
+            .unwrap_or_else(|| panic!("wire/port '{}' not found", name))
+    };
+
+    assert!(def("a").keep, "input a should have keep");
+    assert!(def("b").keep, "output b should have keep");
+    assert!(def("c").keep, "inout c should have keep");
+    assert!(def("d").keep, "wire d should have keep");
+
+    assert!(def("list1").keep, "wire list1 should have keep");
+    assert!(def("list2").keep, "wire list2 should have keep");
+
+    assert!(
+        !def("no_keep_port").keep,
+        "no_keep_port should not have keep"
+    );
+
+    assert!(
+        def("no_keep_out").keep,
+        "no_keep_out should have keep (chained attrs)"
+    );
+
+    assert!(module.assigns[0].keep, "first assign should have keep");
+    assert!(
+        !module.assigns[1].keep,
+        "second assign should not have keep"
+    );
+
+    let cell = |name: &str| {
+        module
+            .cells
+            .iter()
+            .find(|c| c.cell_name == name)
+            .unwrap_or_else(|| panic!("cell '{}' not found", name))
+    };
+    assert!(cell("u1").keep, "cell u1 should have keep");
+    assert!(!cell("u2").keep, "cell u2 should not have keep");
+}
 
 #[test]
 fn test_vector() {

@@ -1,30 +1,26 @@
 use std::{fmt, num::NonZeroUsize, str::FromStr};
 
 use nom::{
+    IResult,
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_till1, take_until},
-    // we do not plan to stream verilog. so we
-    // only include completes.
-    character::complete::{char, digit1, multispace0, one_of, satisfy},
-    character::{is_alphanumeric, is_hex_digit},
-    combinator::{cut, map, opt, recognize, value},
-    multi::{fold_many0, many0, many0_count, separated_list0},
-    sequence::{delimited, pair, preceded, terminated, tuple},
-    IResult,
+    character::{
+        complete::{char, digit1, multispace0, one_of, satisfy},
+        is_alphanumeric, is_hex_digit,
+    },
+    combinator::{cut, map, map_res, opt, recognize, value},
+    multi::{fold_many0, many0_count, separated_list0},
+    sequence::{delimited, pair, preceded, tuple},
 };
 
 use super::*;
-
-fn u82str_unsafe(i: &[u8]) -> &str {
-    unsafe { std::str::from_utf8_unchecked(i) }
-}
 
 /// comment: starts with // and ends with a line.
 /// do not use streaming operators here.
 /// performance critical.
 pub fn skip_whitespace_and_comment(mut i: &[u8]) -> IResult<&[u8], ()> {
     (i, _) = multispace0(i)?;
-    while i.len() > 0 {
+    while !i.is_empty() {
         if i[0] == b'/' {
             i = match value(
                 (),
@@ -44,21 +40,49 @@ pub fn skip_whitespace_and_comment(mut i: &[u8]) -> IResult<&[u8], ()> {
                 Err(_) => break,
             };
             (i, _) = multispace0(i)?;
-        } else if i[0] == b'(' {
-            // currently, we regard attributes as comments.
-            i = match value((), tuple((tag("(*"), take_until("*)"), tag("*)"))))(
-                i,
-            ) as IResult<&[u8], ()>
-            {
-                Ok((i, ())) => i,
-                Err(_) => break,
-            };
-            (i, _) = multispace0(i)?;
         } else {
             break;
         }
     }
     Ok((i, ()))
+}
+
+/// Parses a single `(* ... *)` attribute block. Returns `true` if the
+/// attribute is `keep`, `false` for any other attribute (which is warned
+/// about and discarded).
+fn attr_block(i: &[u8]) -> IResult<&[u8], bool> {
+    let (i, content) = delimited(tag("(*"), take_until("*)"), tag("*)"))(i)?;
+    let content_str = std::str::from_utf8(content)
+        .map_err(|_| {
+            nom::Err::Error(nom::error::Error::new(
+                i,
+                nom::error::ErrorKind::Char,
+            ))
+        })?
+        .trim();
+    let is_keep = content_str == "keep";
+    if !is_keep {
+        tracing::warn!("ignoring unknown attribute: (* {} *)", content_str);
+    }
+    Ok((i, is_keep))
+}
+
+/// Parses optional leading attribute blocks with surrounding whitespace and
+/// returns whether any `(* keep *)` attribute was found.
+fn leading_attrs(i: &[u8]) -> IResult<&[u8], bool> {
+    let (mut i, ()) = skip_whitespace_and_comment(i)?;
+    let mut is_keep = false;
+    loop {
+        if !i.starts_with(b"(*") {
+            break;
+        }
+        let (i2, keep) = attr_block(i)?;
+        i = i2;
+        is_keep |= keep;
+        let (i2, ()) = skip_whitespace_and_comment(i)?;
+        i = i2;
+    }
+    Ok((i, is_keep))
 }
 
 /// a higher-order parser transforming a parser to one that
@@ -76,7 +100,7 @@ where
 
 /// Parse an identifier.
 fn ident(i: &[u8]) -> IResult<&[u8], CompactString> {
-    map(
+    map_res(
         alt((
             preceded(
                 char('\\'),
@@ -89,20 +113,25 @@ fn ident(i: &[u8]) -> IResult<&[u8], CompactString> {
                 take_till(|c| !is_alphanumeric(c) && c != b'_' && c != b'$'),
             )),
         )),
-        |s| CompactString::from(u82str_unsafe(s)),
+        |s| std::str::from_utf8(s).map(CompactString::from),
     )(i)
 }
 
 fn int(input: &[u8]) -> IResult<&[u8], isize> {
-    map(recognize(preceded(opt(char('-')), digit1)), |i| {
-        isize::from_str(u82str_unsafe(i)).unwrap()
-    })(input)
+    map_res(
+        map_res(
+            recognize(preceded(opt(char('-')), digit1)),
+            std::str::from_utf8,
+        ),
+        isize::from_str,
+    )(input)
 }
 
 fn uint(input: &[u8]) -> IResult<&[u8], usize> {
-    map(recognize(digit1), |i| {
-        usize::from_str(u82str_unsafe(i)).unwrap()
-    })(input)
+    map_res(
+        map_res(recognize(digit1), std::str::from_utf8),
+        usize::from_str,
+    )(input)
 }
 
 /// parses a constant literal.
@@ -156,7 +185,7 @@ fn literal(i: &[u8]) -> IResult<&[u8], Vec<WirexprBasic>> {
                     16 => (b'f', 4),
                     _ => unreachable!(),
                 };
-                let full_ndigits = (width + radix_bits - 1) / radix_bits;
+                let full_ndigits = width.div_ceil(radix_bits);
                 let mut tmp_value = vec![b'0'; full_ndigits];
                 let mut tmp_is_xz = vec![b'0'; full_ndigits];
                 let full_width_nonzero =
@@ -168,7 +197,7 @@ fn literal(i: &[u8]) -> IResult<&[u8], Vec<WirexprBasic>> {
                         b'_' => continue,
                         b'x' => (b'0', radix_full_char),
                         b'z' => (radix_full_char, radix_full_char),
-                        num @ _ => (num, b'0'),
+                        num => (num, b'0'),
                     };
                     pos -= 1;
                     tmp_value[pos] = d_value;
@@ -197,7 +226,7 @@ fn literal(i: &[u8]) -> IResult<&[u8], Vec<WirexprBasic>> {
                 (value, is_xz)
             };
 
-            let n_u128s = (width + 127) / 128;
+            let n_u128s = width.div_ceil(128);
             let mut ret = Vec::with_capacity(n_u128s);
             for i in 0..n_u128s {
                 use std::num::Wrapping;
@@ -273,7 +302,7 @@ fn wirexpr(i: &[u8]) -> IResult<&[u8], Wirexpr> {
 fn portdef(i: &[u8]) -> IResult<&[u8], SVerilogPortDef> {
     use SVerilogPortDef::*;
     alt((
-        map(ident, |name| Basic(name)),
+        map(ident, Basic),
         map(
             pair(
                 preceded(ws(char('.')), cut(ident)),
@@ -286,6 +315,7 @@ fn portdef(i: &[u8]) -> IResult<&[u8], SVerilogPortDef> {
 
 fn wiredef_push_<'i>(
     i: &'i [u8],
+    keep: bool,
     defs: &mut Vec<SVerilogWireDef>,
 ) -> IResult<&'i [u8], ()> {
     use WireDefType::*;
@@ -299,9 +329,12 @@ fn wiredef_push_<'i>(
         tuple((char('['), ws(int), char(':'), ws(int), char(']'))),
         |(_, l, _, r, _)| SVerilogRange(l, r),
     ))(i)?;
-    // println!("after wiredef parsing typ {:?}, rng {:?}, remain: {:?}",
-    //          typ, width, u82str_unsafe(i));
-    let build_def = |name| SVerilogWireDef { name, width, typ };
+    let build_def = |name| SVerilogWireDef {
+        name,
+        width,
+        typ,
+        keep,
+    };
     let (i, ()) = cut(map(ws(ident), |name| defs.push(build_def(name))))(i)?;
     let (i, ()) = fold_many0(
         preceded(char(','), ws(cut(ident))),
@@ -321,7 +354,11 @@ fn assign(i: &[u8]) -> IResult<&[u8], SVerilogAssign> {
             cut(wirexpr),
             ws(cut(char(';'))),
         )),
-        |(_, lhs, _, rhs, _)| SVerilogAssign { lhs, rhs },
+        |(_, lhs, _, rhs, _)| SVerilogAssign {
+            lhs,
+            rhs,
+            keep: false,
+        },
     )(i)
 }
 
@@ -351,7 +388,8 @@ fn cell(i: &[u8]) -> IResult<&[u8], SVerilogCell> {
         |(macro_name, cell_name, ioports)| SVerilogCell {
             macro_name,
             cell_name,
-            ioports: ioports.into_iter().filter_map(|port| port).collect(),
+            ioports: ioports.into_iter().flatten().collect(),
+            keep: false,
         },
     )(i)
 }
@@ -368,13 +406,30 @@ fn module(i: &[u8]) -> IResult<&[u8], (CompactString, SVerilogModule)> {
     let mut defs = Vec::new();
     let mut assigns = Vec::new();
     let mut cells = Vec::new();
-    // println!("after header parsing.. at: {:?}", u82str_unsafe(i));
-    let (i, _) = many0_count(alt((
-        |i| wiredef_push_(i, &mut defs),
-        map(assign, |a| assigns.push(a)),
-        map(cell, |c| cells.push(c)),
-    )))(i)?;
+
+    let (i, _) = many0_count(|i| {
+        let (i, keep) = leading_attrs(i)?;
+        // Bind to local so the alt tuple (holding closures referencing `keep`)
+        // is dropped before `keep` goes out of scope at end of the block.
+        let result = alt((
+            |i| wiredef_push_(i, keep, &mut defs),
+            |i| {
+                let (i, mut a) = assign(i)?;
+                a.keep = keep;
+                assigns.push(a);
+                Ok((i, ()))
+            },
+            |i| {
+                let (i, mut c) = cell(i)?;
+                c.keep = keep;
+                cells.push(c);
+                Ok((i, ()))
+            },
+        ))(i);
+        result
+    })(i)?;
     let (i, _) = cut(ws(tag("endmodule")))(i)?;
+
     Ok((
         i,
         (
@@ -384,19 +439,29 @@ fn module(i: &[u8]) -> IResult<&[u8], (CompactString, SVerilogModule)> {
                 defs,
                 assigns,
                 cells,
+                keep: false,
             },
         ),
     ))
 }
 
 fn sverilog(i: &[u8]) -> IResult<&[u8], SVerilog> {
-    map(
-        preceded(
-            many0_count(ws(char(';'))),
-            ws(many0(terminated(ws(module), many0_count(ws(char(';')))))),
-        ),
-        |modules| SVerilog { modules },
-    )(i)
+    let (mut i, _) = many0_count(ws(char(';')))(i)?;
+    let mut modules = Vec::new();
+    loop {
+        let (i2, keep) = leading_attrs(i)?;
+        match module(i2) {
+            Ok((i3, (name, mut module_data))) => {
+                module_data.keep = keep;
+                modules.push((name, module_data));
+                let (i3, _) = many0_count(ws(char(';')))(i3)?;
+                i = i3;
+            }
+            Err(_) => break,
+        }
+    }
+    let (i, ()) = skip_whitespace_and_comment(i)?;
+    Ok((i, SVerilog { modules }))
 }
 
 /// a `Display`able parsing error type, which prints at most
@@ -415,11 +480,10 @@ impl From<nom::Err<nom::error::Error<&[u8]>>> for ParseError {
             },
             nom::Err::Error(e) | nom::Err::Failure(e) => ParseError {
                 code: e.code,
-                partial_input: std::str::from_utf8(
+                partial_input: String::from_utf8_lossy(
                     &e.input[..e.input.len().min(50)],
                 )
-                .unwrap()
-                .to_string(),
+                .into_owned(),
             },
         }
     }
@@ -448,12 +512,13 @@ impl fmt::Display for ParseError {
 
 pub(crate) fn parse_sverilog(i: &[u8]) -> Result<SVerilog, ParseError> {
     let (rem, sv) = sverilog(i)?;
-    if rem.len() > 0 {
-        return Err(nom::Err::Error(nom::error::Error {
+    if rem.is_empty() {
+        Ok(sv)
+    } else {
+        Err(nom::Err::Error(nom::error::Error {
             input: rem,
             code: nom::error::ErrorKind::Complete,
         })
-        .into());
+        .into())
     }
-    Ok(sv)
 }

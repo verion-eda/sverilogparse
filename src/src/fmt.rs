@@ -78,6 +78,9 @@ impl fmt::Display for WireDefType {
 
 impl fmt::Display for SVerilogWireDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.keep {
+            write!(f, "(* keep *) ")?;
+        }
         match self.width {
             None => write!(f, "{} {};", self.typ, SVIdentFmt(&self.name)),
             Some(SVerilogRange(l, r)) => write!(
@@ -136,12 +139,18 @@ impl fmt::Display for Wirexpr {
 
 impl fmt::Display for SVerilogAssign {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.keep {
+            write!(f, "(* keep *) ")?;
+        }
         write!(f, "assign {} = {};", self.lhs, self.rhs)
     }
 }
 
 impl fmt::Display for SVerilogCell {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.keep {
+            write!(f, "(* keep *) ")?;
+        }
         write!(
             f,
             "{} {}({});",
