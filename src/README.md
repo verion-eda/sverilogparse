@@ -78,7 +78,5 @@ for (name, module) in &parsed.modules {
 Files can also be loaded directly with `SVerilog::parse_file(path)`.
 
 [IEEE 1364-2001]: https://ieeexplore.ieee.org/document/954909
-[formal BNF grammar]:
-  https://www.syncad.com/VeriLogger_bnf_Syntax_Verilog_2001.htm
-[Yosys attribute documentation]:
-  https://yosyshq.readthedocs.io/projects/yosys/en/latest/using_yosys/verilog.html#verilog-attributes-and-non-standard-features
+[formal BNF grammar]: https://www.syncad.com/VeriLogger_bnf_Syntax_Verilog_2001.htm
+[Yosys attribute documentation]: https://yosyshq.readthedocs.io/projects/yosys/en/latest/using_yosys/verilog.html#verilog-attributes-and-non-standard-features
