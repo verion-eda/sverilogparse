@@ -60,7 +60,9 @@ fn attr_block(i: &[u8]) -> IResult<&[u8], bool> {
             ))
         })?
         .trim();
-    let is_keep = content_str == "keep";
+
+    // Yosys emits `keep = 32'd1` (valued form); bare `keep` also accepted.
+    let is_keep = content_str.starts_with("keep");
     if !is_keep {
         tracing::warn!("ignoring unknown attribute: (* {} *)", content_str);
     }
