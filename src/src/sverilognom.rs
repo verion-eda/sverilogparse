@@ -1,4 +1,4 @@
-use std::{fmt, num::NonZeroUsize, str::FromStr};
+use std::{collections::HashSet, fmt, num::NonZeroUsize, str::FromStr};
 
 use nom::{
     branch::alt,
@@ -47,10 +47,9 @@ pub fn skip_whitespace_and_comment(mut i: &[u8]) -> IResult<&[u8], ()> {
     Ok((i, ()))
 }
 
-/// Parses a single `(* ... *)` attribute block. Returns `true` if the
-/// attribute is `keep`, `false` for any other attribute (which is warned
-/// about and discarded).
-fn attr_block(i: &[u8]) -> IResult<&[u8], bool> {
+/// Parses a single `(* ... *)` attribute block, returning the trimmed content
+/// string.
+fn attr_block(i: &[u8]) -> IResult<&[u8], String> {
     let (i, content) = delimited(tag("(*"), take_until("*)"), tag("*)"))(i)?;
     let content_str = std::str::from_utf8(content)
         .map_err(|_| {
@@ -59,30 +58,29 @@ fn attr_block(i: &[u8]) -> IResult<&[u8], bool> {
                 nom::error::ErrorKind::Char,
             ))
         })?
-        .trim();
-    let is_keep = content_str == "keep";
-    if !is_keep {
-        tracing::warn!("ignoring unknown attribute: (* {} *)", content_str);
-    }
-    Ok((i, is_keep))
+        .trim()
+        .to_owned();
+    Ok((i, content_str))
 }
 
 /// Parses optional leading attribute blocks with surrounding whitespace and
 /// returns whether any `(* keep *)` attribute was found.
 fn leading_attrs(i: &[u8]) -> IResult<&[u8], bool> {
-    let (mut i, ()) = skip_whitespace_and_comment(i)?;
-    let mut is_keep = false;
-    loop {
-        if !i.starts_with(b"(*") {
-            break;
+    let (i, attrs) =
+        fold_many0(ws(attr_block), HashSet::new, |mut set, attr| {
+            set.insert(attr);
+            set
+        })(i)?;
+
+    let is_keep_attr =
+        |attr: &String| attr == "keep" || attr.starts_with("keep ");
+    for attr in &attrs {
+        // Yosys emits `keep = 32'd1` (valued form); bare `keep` also accepted.
+        if !is_keep_attr(attr) {
+            tracing::warn!("ignoring unknown attribute: (* {} *)", attr);
         }
-        let (i2, keep) = attr_block(i)?;
-        i = i2;
-        is_keep |= keep;
-        let (i2, ()) = skip_whitespace_and_comment(i)?;
-        i = i2;
     }
-    Ok((i, is_keep))
+    Ok((i, attrs.iter().any(is_keep_attr)))
 }
 
 /// a higher-order parser transforming a parser to one that
