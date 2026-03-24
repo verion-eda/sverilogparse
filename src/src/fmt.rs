@@ -29,7 +29,7 @@ impl fmt::Display for SVerilog {
             writeln!(
                 f,
                 "module {}({});",
-                SVIdentFmt(&m_name),
+                SVIdentFmt(m_name),
                 m.ports.iter().format(", ")
             )?;
             let mut ind = indenter::indented(f)
@@ -54,8 +54,8 @@ impl fmt::Display for SVerilogPortDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use SVerilogPortDef::*;
         match self {
-            Basic(s) => write!(f, "{}", SVIdentFmt(&s)),
-            Conn(s, e) => write!(f, ".{}({})", SVIdentFmt(&s), e),
+            Basic(s) => write!(f, "{}", SVIdentFmt(s)),
+            Conn(s, e) => write!(f, ".{}({})", SVIdentFmt(s), e),
         }
     }
 }
@@ -158,7 +158,7 @@ impl fmt::Display for SVerilogCell {
             SVIdentFmt(&self.cell_name),
             self.ioports
                 .iter()
-                .map(|(n, e)| format!(".{}({})", SVIdentFmt(&n), e))
+                .map(|(n, e)| format!(".{}({})", SVIdentFmt(n), e))
                 .format(", ")
         )
     }
