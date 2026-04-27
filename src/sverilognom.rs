@@ -409,7 +409,7 @@ fn module(i: &[u8]) -> IResult<&[u8], (CompactString, SVerilogModule)> {
         let (i, keep) = leading_attrs(i)?;
         // Bind to local so the alt tuple (holding closures referencing `keep`)
         // is dropped before `keep` goes out of scope at end of the block.
-        let result = alt((
+        alt((
             |i| wiredef_push_(i, keep, &mut defs),
             |i| {
                 let (i, mut a) = assign(i)?;
@@ -423,8 +423,7 @@ fn module(i: &[u8]) -> IResult<&[u8], (CompactString, SVerilogModule)> {
                 cells.push(c);
                 Ok((i, ()))
             },
-        ))(i);
-        result
+        ))(i)
     })(i)?;
     let (i, _) = cut(ws(tag("endmodule")))(i)?;
 
