@@ -1,0 +1,4 @@
+**/target
+**/*.rs.bk
+.direnv
+.nix-cuda-wrapper/

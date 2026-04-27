@@ -1,6 +1,7 @@
 use std::{collections::HashSet, fmt, num::NonZeroUsize, str::FromStr};
 
 use nom::{
+    IResult,
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_till1, take_until},
     character::{
@@ -10,7 +11,6 @@ use nom::{
     combinator::{cut, map, map_res, opt, recognize, value},
     multi::{fold_many0, many0_count, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
-    IResult,
 };
 
 use super::*;

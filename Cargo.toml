@@ -1,11 +1,9 @@
 [package]
 name = "sverilogparse"
 version = "0.4.3"
-edition = "2021"
+edition = "2024"
 description = "Verilog netlist (structural verilog) parser"
 license = "AGPL-3.0-only"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 awint = "0.17.0"
@@ -19,3 +17,9 @@ tracing = "0.1"
 
 [dev-dependencies]
 tracing-subscriber = "0.3"
+
+[lints.clippy]
+declare_interior_mutable_const = "deny"
+disallowed_methods = "deny"
+redundant_clone = "deny"
+undocumented_unsafe_blocks = "deny"
