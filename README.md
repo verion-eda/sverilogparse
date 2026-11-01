@@ -4,6 +4,12 @@ A structural Verilog parser written in Rust, targeting the subset of [IEEE
 1364-2001] (Verilog-2001) produced by synthesis tools such as
 [Yosys](https://yosyshq.net/yosys/).
 
+This is a fork of `sverilogparse` from
+[eda-infra-rs](https://github.com/gzz2000/eda-infra-rs) by Zizheng Guo, split
+out into a standalone crate and modified by Verion GmbH for use in
+[gem-harness](https://github.com/verion-eda/gem-harness). The original work is
+not ours.
+
 Similar project (C++):
 [OpenTimer/Parser-Verilog](https://github.com/OpenTimer/Parser-Verilog)
 
@@ -76,6 +82,13 @@ for (name, module) in &parsed.modules {
 ```
 
 Files can also be loaded directly with `SVerilog::parse_file(path)`.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE), like the upstream
+eda-infra-rs. The benchmark netlists in `tests/benchmarks/` come from
+[OpenTimer/Parser-Verilog](https://github.com/OpenTimer/Parser-Verilog) and are
+MIT-licensed, see [tests/benchmarks/README.md](tests/benchmarks/README.md).
 
 [IEEE 1364-2001]: https://ieeexplore.ieee.org/document/954909
 [formal BNF grammar]: https://www.syncad.com/VeriLogger_bnf_Syntax_Verilog_2001.htm
