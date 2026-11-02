@@ -3,7 +3,9 @@ name = "sverilogparse"
 version = "0.4.3"
 edition = "2024"
 description = "Verilog netlist (structural verilog) parser"
-license = "AGPL-3.0-only"
+license = "Apache-2.0"
+authors = ["Zizheng Guo <gzz_2000@126.com>"]
+repository = "https://github.com/verion-eda/sverilogparse"
 
 [dependencies]
 awint = "0.17.0"
